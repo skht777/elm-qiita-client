@@ -1,47 +1,118 @@
 module Main exposing (..)
 
-import Html exposing (Html, text, div, h1, img)
-import Html.Attributes exposing (src)
+import Html exposing (Html, text, div, button)
+import Html.Events exposing (onClick)
 import Http
 import Json.Decode as Decode
-import Json.Encode as Encode
+--import Json.Encode as Encode
 
 
 ---- MODEL ----
 
 
 type alias Model =
-    {}
+    { info: Maybe User }
+
+type alias User =
+    { description : Maybe String
+    , facebookId : Maybe String
+    , followeesCount : Maybe Int
+    , followersCount : Maybe Int
+    , gitHubLoginName : Maybe String
+    , qiitaId : Maybe String
+    , itemsCount : Maybe Int
+    , linkedinId : Maybe Int
+    , location : Maybe String
+    , name : Maybe String
+    , organization : Maybe String
+    , permanentId : Maybe Int
+    , profileImageUrl : Maybe String
+    , twitterScreenName : Maybe String
+    , websiteUrl : Maybe String
+    }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( {}, Cmd.none )
+    ( { info = Nothing }, Cmd.none )
 
 
 
 ---- UPDATE ----
+decodeUser : Decode.Decoder User
+decodeUser =
+    Decode.map2 ( \( f1, f2, f3, f4, f5, f6, f7, f8 ) ( f9, f10, f11, f12, f13, f14, f15 ) -> User f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 )
+        ( Decode.map8 (,,,,,,,)
+            ( Decode.maybe ( Decode.field "description" Decode.string ) )
+            ( Decode.maybe ( Decode.field "facebook_id" Decode.string ) )
+            ( Decode.maybe ( Decode.field "followees_count" Decode.int ) )
+            ( Decode.maybe ( Decode.field "followers_count" Decode.int ) )
+            ( Decode.maybe ( Decode.field "github_login_name" Decode.string ) )
+            ( Decode.maybe ( Decode.field "qiita_id" Decode.string ) )
+            ( Decode.maybe ( Decode.field "items_count" Decode.int ) )
+            ( Decode.maybe ( Decode.field "linkedin_id" Decode.int ) )
+        )
+        ( Decode.map7 (,,,,,,)
+            (Decode.maybe ( Decode.field "location" Decode.string ) )
+            (Decode.maybe ( Decode.field "name" Decode.string ) )
+            (Decode.maybe ( Decode.field "organization" Decode.string ) )
+            (Decode.maybe ( Decode.field "permanent_id" Decode.int ) )
+            (Decode.maybe ( Decode.field "profile_image_url" Decode.string ) )
+            (Decode.maybe ( Decode.field "twitter_screen_name" Decode.string ) )
+            (Decode.maybe ( Decode.field "website_url" Decode.string ) )
+        )
 
 
 type Msg
-    = NoOp
+    = Request
+    | GetUserResponse (Result Http.Error User)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    ( model, Cmd.none )
+    case msg of
+        Request ->
+            let
+                user = decodeUser
+                url = "https://qiita.com/api/v2/users/skht777"
+                info = Http.send GetUserResponse <| (Http.get url user)
+            in
+                ( model, info )
+        GetUserResponse res ->
+            let
+                val = case res of
+                    Ok v -> v
+                    Err _ -> Debug.crash ""
+            in   
+                ( { model | info = Just val }, Cmd.none )
+
 
 
 
 ---- VIEW ----
+{--
+toli: String -> Html Msg
 
+```
+createElement: User -> Html Msg
+createElement user =
+    ul []
+       [
+       ]
+--}
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ img [ src "/logo.svg" ] []
-        , h1 [] [ text "Your Elm App is working!" ]
-        ]
+    let
+        user = case model.info of
+            Just u -> text <| toString model.info
+            Nothing -> text ""     
+    in
+        div []
+            [ button[onClick Request][text "まあ押せ"]
+            , div []
+                  [ user ]
+            ]
 
 
 
