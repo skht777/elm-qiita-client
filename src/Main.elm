@@ -1,17 +1,23 @@
 module Main exposing (..)
 
-import Html exposing (Html, text, div, button)
-import Html.Events exposing (onClick)
+import Html exposing (Html, a, button, div, img, input, li, p, text, ul)
+import Html.Attributes exposing (href, src, style, value)
+import Html.Events exposing (onClick, onInput)
 import Http
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (Decoder)
+
+
 --import Json.Encode as Encode
-
-
 ---- MODEL ----
 
 
 type alias Model =
-    { info: Maybe User }
+    { target : Id, searched : Bool, info : Maybe User }
+
+
+type alias Id =
+    String
+
 
 type alias User =
     { description : Maybe String
@@ -21,7 +27,7 @@ type alias User =
     , gitHubLoginName : Maybe String
     , qiitaId : Maybe String
     , itemsCount : Maybe Int
-    , linkedinId : Maybe Int
+    , linkedinId : Maybe String
     , location : Maybe String
     , name : Maybe String
     , organization : Maybe String
@@ -34,85 +40,167 @@ type alias User =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { info = Nothing }, Cmd.none )
+    ( { target = "skht777", searched = False, info = Nothing }, Cmd.none )
 
 
 
 ---- UPDATE ----
+
+
+safeDecode : String -> Decoder a -> Decoder (Maybe a)
+safeDecode field t =
+    Decode.maybe (Decode.field field t)
+
+
+safeDecodeString : String -> Decoder (Maybe String)
+safeDecodeString field =
+    safeDecode field Decode.string
+
+
+safeDecodeInt : String -> Decoder (Maybe Int)
+safeDecodeInt field =
+    safeDecode field Decode.int
+
+
 decodeUser : Decode.Decoder User
 decodeUser =
-    Decode.map2 ( \( f1, f2, f3, f4, f5, f6, f7, f8 ) ( f9, f10, f11, f12, f13, f14, f15 ) -> User f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 )
-        ( Decode.map8 (,,,,,,,)
-            ( Decode.maybe ( Decode.field "description" Decode.string ) )
-            ( Decode.maybe ( Decode.field "facebook_id" Decode.string ) )
-            ( Decode.maybe ( Decode.field "followees_count" Decode.int ) )
-            ( Decode.maybe ( Decode.field "followers_count" Decode.int ) )
-            ( Decode.maybe ( Decode.field "github_login_name" Decode.string ) )
-            ( Decode.maybe ( Decode.field "qiita_id" Decode.string ) )
-            ( Decode.maybe ( Decode.field "items_count" Decode.int ) )
-            ( Decode.maybe ( Decode.field "linkedin_id" Decode.int ) )
+    Decode.map2 (\( f1, f2, f3, f4, f5, f6, f7, f8 ) ( f9, f10, f11, f12, f13, f14, f15 ) -> User f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15)
+        (Decode.map8 (,,,,,,,)
+            (safeDecodeString "description")
+            (safeDecodeString "facebook_id")
+            (safeDecodeInt "followees_count")
+            (safeDecodeInt "followers_count")
+            (safeDecodeString "github_login_name")
+            (safeDecodeString "id")
+            (safeDecodeInt "items_count")
+            (safeDecodeString "linkedin_id")
         )
-        ( Decode.map7 (,,,,,,)
-            (Decode.maybe ( Decode.field "location" Decode.string ) )
-            (Decode.maybe ( Decode.field "name" Decode.string ) )
-            (Decode.maybe ( Decode.field "organization" Decode.string ) )
-            (Decode.maybe ( Decode.field "permanent_id" Decode.int ) )
-            (Decode.maybe ( Decode.field "profile_image_url" Decode.string ) )
-            (Decode.maybe ( Decode.field "twitter_screen_name" Decode.string ) )
-            (Decode.maybe ( Decode.field "website_url" Decode.string ) )
+        (Decode.map7 (,,,,,,)
+            (safeDecodeString "location")
+            (safeDecodeString "name")
+            (safeDecodeString "organization")
+            (safeDecodeInt "permanent_id")
+            (safeDecodeString "profile_image_url")
+            (safeDecodeString "twitter_screen_name")
+            (safeDecodeString "website_url")
         )
 
 
 type Msg
-    = Request
+    = InputId Id
+    | Request
     | GetUserResponse (Result Http.Error User)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        InputId s ->
+            ( { model | target = s }, Cmd.none )
+
         Request ->
             let
-                user = decodeUser
-                url = "https://qiita.com/api/v2/users/skht777"
-                info = Http.send GetUserResponse <| (Http.get url user)
+                user =
+                    decodeUser
+
+                url =
+                    "https://qiita.com/api/v2/users/" ++ model.target
+
+                info =
+                    Http.send GetUserResponse <| Http.get url user
             in
-                ( model, info )
+            ( { model | searched = True }, info )
+
         GetUserResponse res ->
             let
-                val = case res of
-                    Ok v -> v
-                    Err _ -> Debug.crash ""
-            in   
-                ( { model | info = Just val }, Cmd.none )
+                val =
+                    case res of
+                        Ok v ->
+                            Just v
 
+                        Err _ ->
+                            Nothing
+            in
+            ( { model | info = val }, Cmd.none )
 
 
 
 ---- VIEW ----
-{--
-toli: String -> Html Msg
 
-```
-createElement: User -> Html Msg
+
+makeLi : Html Msg -> Html Msg
+makeLi e =
+    li [] [ e ]
+
+
+unwrap : Maybe String -> String
+unwrap me =
+    Maybe.withDefault "" me
+
+
+unwrapInt : Maybe Int -> String
+unwrapInt me =
+    unwrap <| Maybe.map toString me
+
+
+mapText : (Maybe a -> String) -> Maybe a -> Html Msg
+mapText f me =
+    text <| f me
+
+
+mapLink : String -> String -> Maybe String -> Html Msg
+mapLink root s me =
+    Maybe.map (\name -> a [ href <| root ++ name ] [ p [] [ text <| s ++ " " ++ name ] ]) me
+        |> Maybe.withDefault (text "")
+
+
+createElement : User -> Html Msg
 createElement user =
-    ul []
-       [
-       ]
---}
+    ul [] <|
+        List.map makeLi
+            [ mapText unwrap user.description
+            , mapLink "https://www.facebook.com/" "Facebook" user.facebookId
+            , mapText unwrapInt user.followeesCount
+            , mapText unwrapInt user.followersCount
+            , mapLink "https://github.com/" "GitHub" user.gitHubLoginName
+            , mapLink "https://qiita.com/" "Qiita" user.qiitaId
+            , mapText unwrapInt user.itemsCount
+            , mapLink "https://jp.linkedin.com/" "LinkdIn" user.linkedinId
+            , mapText unwrap user.location
+            , mapText unwrap user.name
+            , mapText unwrap user.organization
+            , mapText unwrapInt user.permanentId
+            , img
+                [ style [ ( "verticalAlign", "middle" ) ]
+                , src <| unwrap user.profileImageUrl
+                ]
+                []
+            , mapLink "https://twitter.com/" "Twitter" user.twitterScreenName
+            , mapLink "" "WebSite" user.websiteUrl
+            ]
+
 
 view : Model -> Html Msg
 view model =
     let
-        user = case model.info of
-            Just u -> text <| toString model.info
-            Nothing -> text ""     
+        user =
+            case model.info of
+                Just u ->
+                    createElement u
+
+                Nothing ->
+                    text <|
+                        if model.searched then
+                            "ユーザが存在しません"
+                        else
+                            ""
     in
-        div []
-            [ button[onClick Request][text "まあ押せ"]
-            , div []
-                  [ user ]
-            ]
+    div []
+        [ input [ value model.target, onInput InputId ] []
+        , button [ onClick Request ] [ text "検索" ]
+        , div []
+            [ user ]
+        ]
 
 
 
